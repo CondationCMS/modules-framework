@@ -1,0 +1,17 @@
+
+.project
+.settings
+.classpath
+target
+*.log
+nbproject
+.buildpath
+logs
+nb-configuration.xml
+nbactions.xml
+nbactions-default.xml
+.nb-gradle
+build
+.gradle
+target/
+.vscode/
