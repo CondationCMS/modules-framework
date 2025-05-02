@@ -21,10 +21,6 @@ package com.condation.modules.api.annotation;
  * <http://www.gnu.org/licenses/gpl-3.0.html>.
  * #L%
  */
-
-
-
-
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -33,6 +29,7 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.file.NoSuchFileException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -71,21 +68,25 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor implements P
 		Elements elements = processingEnv.getElementUtils();
 
 		roundEnv.getElementsAnnotatedWith(Extension.class).stream().forEach((e) -> {
-			Extension a = e.getAnnotation(Extension.class);
-			if (!(a == null)) {
-				if (!(!e.getKind().isClass() && !e.getKind().isInterface())) {
-					TypeElement typedElement = (TypeElement) e;
-					Collection<TypeElement> teCollection = getTypeElements(typedElement, a);
-					teCollection.forEach((te) -> {
-						String extensionName = elements.getBinaryName(te).toString();
-						String extensionImplName = elements.getBinaryName(typedElement).toString();
-						if (!extensions.containsKey(extensionName)) {
-							extensions.put(extensionName, new TreeSet<>());
-						}
-						extensions.get(extensionName).add(extensionImplName);
-					});
+
+			var exts = e.getAnnotationsByType(Extension.class);
+			Arrays.stream(exts).forEach(a -> {
+				if (!(a == null)) {
+					if (!(!e.getKind().isClass() && !e.getKind().isInterface())) {
+						TypeElement typedElement = (TypeElement) e;
+						Collection<TypeElement> teCollection = getTypeElements(typedElement, a);
+						teCollection.forEach((te) -> {
+							String extensionName = elements.getBinaryName(te).toString();
+							String extensionImplName = elements.getBinaryName(typedElement).toString();
+							if (!extensions.containsKey(extensionName)) {
+								extensions.put(extensionName, new TreeSet<>());
+							}
+							extensions.get(extensionName).add(extensionImplName);
+						});
+					}
 				}
-			}
+			});
+
 		});
 
 		// load existing extensions
