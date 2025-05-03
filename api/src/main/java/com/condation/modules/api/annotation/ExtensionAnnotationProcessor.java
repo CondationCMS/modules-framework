@@ -50,7 +50,10 @@ import javax.tools.Diagnostic.Kind;
 import javax.tools.FileObject;
 import javax.tools.StandardLocation;
 
-@SupportedAnnotationTypes("com.condation.modules.api.annotation.Extension")
+@SupportedAnnotationTypes({
+    "com.condation.modules.api.annotation.Extension",
+    "com.condation.modules.api.annotation.Extensions"
+})
 public class ExtensionAnnotationProcessor extends AbstractProcessor implements Processor {
 
 	@Override
@@ -67,9 +70,10 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor implements P
 
 		Elements elements = processingEnv.getElementUtils();
 
-		roundEnv.getElementsAnnotatedWith(Extension.class).stream().forEach((e) -> {
-
+		roundEnv.getElementsAnnotatedWithAny(Set.of(Extension.class, Extensions.class)).stream().forEach((e) -> {
 			var exts = e.getAnnotationsByType(Extension.class);
+			processingEnv.getMessager().printMessage(Kind.NOTE, "scaning %s for extensions".formatted(e.getSimpleName()));
+			processingEnv.getMessager().printMessage(Kind.NOTE, "found %d extensions".formatted(exts.length));
 			Arrays.stream(exts).forEach(a -> {
 				if (!(a == null)) {
 					if (!(!e.getKind().isClass() && !e.getKind().isInterface())) {
