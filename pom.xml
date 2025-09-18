@@ -67,7 +67,7 @@
 			<dependency>
 				<groupId>org.projectlombok</groupId>
 				<artifactId>lombok</artifactId>
-				<version>1.18.40</version>
+				<version>1.18.42</version>
 				<scope>provided</scope>
 			</dependency>
 		</dependencies>
@@ -85,7 +85,7 @@
 							<path>
 								<groupId>org.projectlombok</groupId>
 								<artifactId>lombok</artifactId>
-								<version>1.18.40</version>
+								<version>1.18.42</version>
 							</path>
 							<path>
 								<groupId>com.google.auto.service</groupId>
@@ -216,7 +216,7 @@
 						<path>
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
-							<version>1.18.40</version>
+							<version>1.18.42</version>
 						</path>
 						<path>
 							<groupId>com.condation.modules.framework</groupId>
