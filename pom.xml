@@ -14,6 +14,7 @@
 	<description>
 		A framework to provide modules/plugins for Condation products.
 	</description>
+	<name>modules-framework</name>
 
 	<licenses>
 		<license>
