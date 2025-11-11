@@ -105,7 +105,7 @@ public class ModuleImpl implements Module {
 		}
 	}
 
-	public void init(final ClassLoader parentClassLoader) throws MalformedURLException, IOException {
+	public void init(final ModuleAPIClassLoader parentClassLoader) throws MalformedURLException, IOException {
 		List<URL> urls = new ArrayList<>();
 
 		File[] libs = new File(moduleDir, "libs").listFiles((File dir, String name1) -> name1.endsWith(".jar"));

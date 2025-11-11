@@ -57,7 +57,7 @@ public class ModuleAPIClassLoader extends ClassLoader {
 		this.apiPackages.add("sun.");
 	}
 
-	private boolean isAllowed(final String name) {
+	boolean isAllowed(final String name) {
 		for (String packageName : apiPackages) {
 			if (name.startsWith(packageName)) {
 				return true;

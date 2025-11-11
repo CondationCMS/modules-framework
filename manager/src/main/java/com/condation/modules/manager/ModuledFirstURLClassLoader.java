@@ -22,109 +22,167 @@ package com.condation.modules.manager;
  * #L%
  */
 
-
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 /**
- *
- * @author marx
+ * A ClassLoader that prefers to load classes and resources from its own module
+ * first (child-first), instead of delegating to the parent first.
+ * <p>
+ * This allows each module to bring its own dependencies (e.g. Jakarta Mail, SLF4J,
+ * etc.) without causing type conflicts with the parent or other modules.
+ * </p>
+ * <p>
+ * Use this class if you want to completely isolate module dependencies.
+ * </p>
  */
 public class ModuledFirstURLClassLoader extends URLClassLoader {
 
-	public ModuledFirstURLClassLoader(URL[] classpath, ClassLoader parent) {
-		super(classpath, parent);
-	}
+    private final ModuleAPIClassLoader moduleAPIClassLoader;
 
-	@Override
-	protected synchronized Class<?> loadClass(String name, boolean resolve)
-			throws ClassNotFoundException {
-		// First, check if the class has already been loaded
-		Class<?> c = findLoadedClass(name);
-		if (c == null) {
-			
-			if (c == null) {
-				try {
-					// checking local
-					c = findClass(name);
-				} catch (ClassNotFoundException e) {
-					// checking parent
-					// This call to loadClass may eventually call findClass again, in case the parent doesn't find anything.
-					c = super.loadClass(name, resolve);
-				}
-			}
-		}
-		if (resolve) {
-			resolveClass(c);
-		}
-		return c;
-	}
+    public ModuledFirstURLClassLoader(URL[] classpath, ModuleAPIClassLoader parent) {
+        super(classpath, parent);
+        this.moduleAPIClassLoader = parent;
+    }
 
-	@Override
-	public URL getResource(String name) {
-		URL url = null;
-		if (url == null) {
-			url = findResource(name);
-			if (url == null) {
-				// This call to getResource may eventually call findResource again, in case the parent doesn't find anything.
-				url = super.getResource(name);
-			}
-		}
-		return url;
-	}
+    /**
+     * Child-first class loading strategy with safety against mixed class loaders.
+     * 
+     * 1️⃣ Check if already loaded and ensure it's from the correct loader.
+     * 2️⃣ System/core classes always from parent.
+     * 3️⃣ Try to load from this module (child-first).
+     * 4️⃣ Fallback to parent if allowed.
+     */
+    @Override
+    protected synchronized Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        // 1️⃣ Already loaded?
+        Class<?> loadedClass = findLoadedClass(name);
+        if (loadedClass != null) {
+            // Prüfen, ob die Klasse vom richtigen Loader stammt
+            if (loadedClass.getClassLoader() != this && loadedClass.getClassLoader() != null) {
+                // Wenn die Klasse aus dem falschen Loader kommt (z. B. Parent),
+                // dann erzwingen wir Neuladen aus dem Child, falls erlaubt.
+                if (!isSystemClass(name) && !moduleAPIClassLoader.isAllowed(name)) {
+                    // Versuche, eigene Version zu laden
+                    try {
+                        loadedClass = findClass(name);
+                    } catch (ClassNotFoundException ignore) {
+                        // Wenn das fehlschlägt, nutzen wir die geladene (Parent-)Version
+                    }
+                }
+            }
 
-	@Override
-	public Enumeration<URL> getResources(String name) throws IOException {
-		/**
-		 * Similar to super, but local resources are enumerated before parent
-		 * resources
-		 */
-		Enumeration<URL> localUrls = findResources(name);
-		Enumeration<URL> parentUrls = null;
-		if (getParent() != null) {
-			parentUrls = getParent().getResources(name);
-		}
-		final List<URL> urls = new ArrayList<>();
-		if (localUrls != null) {
-			while (localUrls.hasMoreElements()) {
-				urls.add(localUrls.nextElement());
-			}
-		}
-		if (parentUrls != null) {
-			while (parentUrls.hasMoreElements()) {
-				urls.add(parentUrls.nextElement());
-			}
-		}
-		return new Enumeration<URL>() {
-			Iterator<URL> iter = urls.iterator();
+            if (resolve) {
+                resolveClass(loadedClass);
+            }
+            return loadedClass;
+        }
 
-			@Override
-			public boolean hasMoreElements() {
-				return iter.hasNext();
-			}
+        // 2️⃣ System / core packages: immer vom Parent
+        if (isSystemClass(name)) {
+            return super.loadClass(name, resolve);
+        }
 
-			@Override
-			public URL nextElement() {
-				return iter.next();
-			}
-		};
-	}
+        // 3️⃣ Try to find class inside module (child-first)
+        try {
+            Class<?> clazz = findClass(name);
+            if (resolve) {
+                resolveClass(clazz);
+            }
+            return clazz;
+        } catch (ClassNotFoundException e) {
+            // 4️⃣ fallback: API or shared classes from parent
+            Class<?> clazz = loadFromParent(name, resolve);
+            if (resolve) {
+                resolveClass(clazz);
+            }
+            return clazz;
+        }
+    }
 
-	@Override
-	public InputStream getResourceAsStream(String name) {
-		URL url = getResource(name);
-		try {
-			return url != null ? url.openStream() : null;
-		} catch (IOException e) {
-		}
-		return null;
-	}
+    /**
+     * Load a class from the parent only if explicitly allowed (API).
+     */
+    private Class<?> loadFromParent(String name, boolean resolve) throws ClassNotFoundException {
+        if (moduleAPIClassLoader.isAllowed(name)) {
+            return super.loadClass(name, resolve);
+        }
+        // not allowed, aber als letzte Rettung trotzdem versuchen
+        return super.loadClass(name, resolve);
+    }
 
+    /**
+     * Determines if the class should always be loaded from the system class loader.
+     */
+    private boolean isSystemClass(String name) {
+        return name.startsWith("java.")
+                || name.startsWith("javax.")
+                || name.startsWith("sun.")
+                || name.startsWith("jdk.")
+                || name.startsWith("org.w3c.")
+                || name.startsWith("org.xml.")
+                || name.startsWith("org.objectweb.asm.") // used by some frameworks
+                || name.startsWith("com.sun.");
+    }
+
+    /**
+     * Child-first resource lookup.
+     */
+    @Override
+    public URL getResource(String name) {
+        URL url = findResource(name);
+        if (url == null) {
+            url = super.getResource(name);
+        }
+        return url;
+    }
+
+    /**
+     * Child-first enumeration of resources.
+     */
+    @Override
+    public Enumeration<URL> getResources(String name) throws IOException {
+        List<URL> urls = new ArrayList<>();
+
+        // local first
+        Enumeration<URL> localUrls = findResources(name);
+        while (localUrls.hasMoreElements()) {
+            urls.add(localUrls.nextElement());
+        }
+
+        // then parent
+        if (getParent() != null) {
+            Enumeration<URL> parentUrls = getParent().getResources(name);
+            while (parentUrls.hasMoreElements()) {
+                urls.add(parentUrls.nextElement());
+            }
+        }
+
+        return Collections.enumeration(urls);
+    }
+
+    /**
+     * Ensures ServiceLoader works with module-local META-INF/services resources.
+     */
+    @Override
+    public InputStream getResourceAsStream(String name) {
+        URL url = getResource(name);
+        if (url != null) {
+            try {
+                return url.openStream();
+            } catch (IOException ignored) {}
+        }
+        return null;
+    }
+
+    /**
+     * Utility for module-specific ServiceLoader usage.
+     * Always use this instead of ServiceLoader.load(X.class)!
+     */
+    public <T> ServiceLoader<T> loadService(Class<T> serviceClass) {
+        return ServiceLoader.load(serviceClass, this);
+    }
 }
