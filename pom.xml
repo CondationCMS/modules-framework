@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.condation.modules.framework</groupId>
 	<artifactId>modules-framework</artifactId>
-	<version>1.2.0</version>
+	<version>1.3.0</version>
 	<packaging>pom</packaging>
 	
 	<inceptionYear>2023</inceptionYear>
@@ -14,6 +14,7 @@
 	<description>
 		A framework to provide modules/plugins for Condation products.
 	</description>
+	<name>modules-framework</name>
 
 	<licenses>
 		<license>

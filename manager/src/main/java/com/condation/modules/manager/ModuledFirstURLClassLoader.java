@@ -4,7 +4,7 @@ package com.condation.modules.manager;
  * #%L
  * modules-manager
  * %%
- * Copyright (C) 2023 - 2024 CondationCMS
+ * Copyright (C) 2023 - 2025 CondationCMS
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -22,109 +22,103 @@ package com.condation.modules.manager;
  * #L%
  */
 
-
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 /**
- *
- * @author marx
+ * A strict child-first ClassLoader that isolates module dependencies
+ * and only delegates to the ModuleAPIClassLoader when explicitly allowed.
  */
 public class ModuledFirstURLClassLoader extends URLClassLoader {
 
-	public ModuledFirstURLClassLoader(URL[] classpath, ClassLoader parent) {
-		super(classpath, parent);
-	}
+    private final ModuleAPIClassLoader moduleAPIClassLoader;
 
-	@Override
-	protected synchronized Class<?> loadClass(String name, boolean resolve)
-			throws ClassNotFoundException {
-		// First, check if the class has already been loaded
-		Class<?> c = findLoadedClass(name);
-		if (c == null) {
-			
-			if (c == null) {
-				try {
-					// checking local
-					c = findClass(name);
-				} catch (ClassNotFoundException e) {
-					// checking parent
-					// This call to loadClass may eventually call findClass again, in case the parent doesn't find anything.
-					c = super.loadClass(name, resolve);
-				}
-			}
-		}
-		if (resolve) {
-			resolveClass(c);
-		}
-		return c;
-	}
+    public ModuledFirstURLClassLoader(URL[] classpath, ModuleAPIClassLoader moduleAPIClassLoader) {
+        // Use system classloader as parent to avoid unwanted delegation
+        super(classpath, ClassLoader.getSystemClassLoader());
+        this.moduleAPIClassLoader = moduleAPIClassLoader;
+    }
 
-	@Override
-	public URL getResource(String name) {
-		URL url = null;
-		if (url == null) {
-			url = findResource(name);
-			if (url == null) {
-				// This call to getResource may eventually call findResource again, in case the parent doesn't find anything.
-				url = super.getResource(name);
-			}
-		}
-		return url;
-	}
+    @Override
+    protected synchronized Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+		// Check already loaded
+        Class<?> loadedClass = findLoadedClass(name);
+        if (loadedClass != null) {
+            if (resolve) resolveClass(loadedClass);
+            return loadedClass;
+        }
 
-	@Override
-	public Enumeration<URL> getResources(String name) throws IOException {
-		/**
-		 * Similar to super, but local resources are enumerated before parent
-		 * resources
-		 */
-		Enumeration<URL> localUrls = findResources(name);
-		Enumeration<URL> parentUrls = null;
-		if (getParent() != null) {
-			parentUrls = getParent().getResources(name);
-		}
-		final List<URL> urls = new ArrayList<>();
-		if (localUrls != null) {
-			while (localUrls.hasMoreElements()) {
-				urls.add(localUrls.nextElement());
-			}
-		}
-		if (parentUrls != null) {
-			while (parentUrls.hasMoreElements()) {
-				urls.add(parentUrls.nextElement());
-			}
-		}
-		return new Enumeration<URL>() {
-			Iterator<URL> iter = urls.iterator();
+		// System and JDK classes → always from parent/system
+        if (isSystemClass(name)) {
+            return super.loadClass(name, resolve);
+        }
 
-			@Override
-			public boolean hasMoreElements() {
-				return iter.hasNext();
-			}
+		// Try to find class in this module first (child-first)
+        try {
+            Class<?> clazz = findClass(name);
+            if (resolve) resolveClass(clazz);
+            return clazz;
+        } catch (ClassNotFoundException e) {
+			// If explicitly allowed, load from API loader
+            if (moduleAPIClassLoader.isAllowed(name)) {
+                try {
+                    Class<?> clazz = moduleAPIClassLoader.loadClass(name);
+                    if (resolve) resolveClass(clazz);
+                    return clazz;
+                } catch (ClassNotFoundException ignored) {
+                    // Fallthrough
+                }
+            }
+			// Fallback: maybe system/parent has it (e.g. JDK or shared lib)
+            return super.loadClass(name, resolve);
+        }
+    }
 
-			@Override
-			public URL nextElement() {
-				return iter.next();
-			}
-		};
-	}
+    private boolean isSystemClass(String name) {
+        return name.startsWith("java.")
+            || name.startsWith("javax.")
+            || name.startsWith("sun.")
+            || name.startsWith("jdk.")
+            || name.startsWith("org.w3c.")
+            || name.startsWith("org.xml.")
+            || name.startsWith("org.objectweb.asm.")
+            || name.startsWith("com.sun.");
+    }
 
-	@Override
-	public InputStream getResourceAsStream(String name) {
-		URL url = getResource(name);
-		try {
-			return url != null ? url.openStream() : null;
-		} catch (IOException e) {
-		}
-		return null;
-	}
+    @Override
+    public URL getResource(String name) {
+        URL url = findResource(name);
+        if (url == null) url = super.getResource(name);
+        return url;
+    }
 
+    @Override
+    public Enumeration<URL> getResources(String name) throws IOException {
+        List<URL> urls = new ArrayList<>();
+        Enumeration<URL> local = findResources(name);
+        while (local.hasMoreElements()) urls.add(local.nextElement());
+
+        Enumeration<URL> parent = getParent().getResources(name);
+        while (parent.hasMoreElements()) urls.add(parent.nextElement());
+
+        return Collections.enumeration(urls);
+    }
+
+    @Override
+    public InputStream getResourceAsStream(String name) {
+        URL url = getResource(name);
+        if (url != null) {
+            try {
+                return url.openStream();
+            } catch (IOException ignored) {}
+        }
+        return null;
+    }
+
+    public <T> ServiceLoader<T> loadService(Class<T> serviceClass) {
+        return ServiceLoader.load(serviceClass, this);
+    }
 }

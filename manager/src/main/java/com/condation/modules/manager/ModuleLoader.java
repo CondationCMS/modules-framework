@@ -48,7 +48,7 @@ public class ModuleLoader {
 	final File modulesPath;
 	final File modulesDataPath;
 
-	final ClassLoader globalClassLoader;
+	final ModuleAPIClassLoader globalClassLoader;
 
 	final Context context;
 	final ModuleInjector injector;
@@ -56,7 +56,7 @@ public class ModuleLoader {
 	final ModuleRequestContextFactory requestContextFactory;
 
 	protected ModuleLoader(final ManagerConfiguration configuration, final File modulesPath, final File modulesDataPath, 
-			final ClassLoader globalClassLoader, final Context context, final ModuleInjector injector,
+			final ModuleAPIClassLoader globalClassLoader, final Context context, final ModuleInjector injector,
 			final ModuleRequestContextFactory requestContextFactory) {
 		this.configuration = configuration;
 		this.modulesPath = modulesPath;

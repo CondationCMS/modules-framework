@@ -21,7 +21,6 @@ package com.condation.modules.manager;
  * <http://www.gnu.org/licenses/gpl-3.0.html>.
  * #L%
  */
-
 import com.condation.modules.api.Context;
 import com.condation.modules.api.ExtensionPoint;
 import com.condation.modules.api.Module;
@@ -72,9 +71,9 @@ public class ModuleImpl implements Module {
 	private final ModuleInjector injector;
 
 	Map<Class, List> extensions = new HashMap<>();
-	
+
 	private ModuleServiceLoader moduleServiceLoader;
-	
+
 	protected ModuleImpl(final File moduleDir, final File modulesDataDir, final Context context,
 			final ModuleInjector injector, final ModuleRequestContextFactory requestContextFactory) throws MalformedURLException, IOException {
 		this.moduleDir = moduleDir;
@@ -105,7 +104,7 @@ public class ModuleImpl implements Module {
 		}
 	}
 
-	public void init(final ClassLoader parentClassLoader) throws MalformedURLException, IOException {
+	public void init(final ModuleAPIClassLoader parentClassLoader) throws MalformedURLException, IOException {
 		List<URL> urls = new ArrayList<>();
 
 		File[] libs = new File(moduleDir, "libs").listFiles((File dir, String name1) -> name1.endsWith(".jar"));
@@ -124,7 +123,7 @@ public class ModuleImpl implements Module {
 			dataDir.mkdirs();
 		}
 		this.configuration = new ModuleConfiguration(dataDir);
-		
+
 		this.moduleServiceLoader = ModuleServiceLoader.create(classloader);
 	}
 
@@ -133,27 +132,35 @@ public class ModuleImpl implements Module {
 		ServiceLoader<? extends ExtensionPoint> serviceLoader = ServiceLoader.load(extensionClass, classloader);
 		return serviceLoader.iterator().hasNext();
 	}
-	
+
 	@Override
 	public <T extends ExtensionPoint> List<T> extensions(Class<T> extensionClass) {
-		
+
+		ClassLoaderInterceptor interceptor = new ClassLoaderInterceptor(classloader);
+
 		return moduleServiceLoader.get(extensionClass).stream()
 				.map(ext -> {
-			ext.setContext(context);
-			ext.setConfiguration(configuration);
+					try {
+						// Proxy erstellen, das alle Methoden mit ThreadClassLoader umhüllt
+						T proxy = interceptor.createProxy(extensionClass, classloader, ext);
 
-			if (requestContextFactory != null) {
-				ext.setRequestContext(requestContextFactory.createContext());
-			}
+						proxy.setContext(context);
+						proxy.setConfiguration(configuration);
 
-			if (injector != null) {
-				injector.inject(ext);
-			}
+						if (requestContextFactory != null) {
+							proxy.setRequestContext(requestContextFactory.createContext());
+						}
 
-			ext.init();
+						if (injector != null) {
+							injector.inject(proxy);
+						}
 
-			return ext;
-		}).toList();
+						proxy.init();
+						return proxy;
+					} catch (Exception e) {
+						throw new RuntimeException("Failed to create classloader proxy for extension", e);
+					}
+				}).toList();
 	}
 
 	@Override
