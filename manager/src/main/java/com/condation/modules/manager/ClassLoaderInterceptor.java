@@ -21,21 +21,24 @@ package com.condation.modules.manager;
  * <http://www.gnu.org/licenses/gpl-3.0.html>.
  * #L%
  */
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
-import net.bytebuddy.ByteBuddy;
-import net.bytebuddy.implementation.InvocationHandlerAdapter;
-import net.bytebuddy.matcher.ElementMatchers;
-
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
-import java.util.Arrays;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+import net.bytebuddy.implementation.InvocationHandlerAdapter;
 import net.bytebuddy.implementation.attribute.MethodAttributeAppender;
+import net.bytebuddy.matcher.ElementMatchers;
 
 public class ClassLoaderInterceptor {
 
+	private static final ByteBuddy BYTE_BUDDY = new ByteBuddy();
+	
+	private final Map<Class<?>, Class<?>> proxyCache = new ConcurrentHashMap<>();
 	private final ClassLoader moduleClassLoader;
 
 	public ClassLoaderInterceptor(ClassLoader moduleClassLoader) {
@@ -46,9 +49,27 @@ public class ClassLoaderInterceptor {
 	 * Dynamisch Proxy erzeugen, das den ClassLoader für alle Methodenaufrufe
 	 * setzt.
 	 */
+	@SuppressWarnings("unchecked")
 	public <T> T createProxy(Class<T> extensionClass, ClassLoader moduleClassLoader, T targetInstance) throws Exception {
-		ByteBuddy buddy = new ByteBuddy();
+		Class<?> targetClass = targetInstance.getClass();
 
+		Class<? extends T> proxyClass = (Class<? extends T>) proxyCache.computeIfAbsent(targetClass, clz -> {
+			return BYTE_BUDDY.subclass(clz)
+					.defineField("invocationHandler", InvocationHandler.class, Visibility.PRIVATE)
+					// Zusätzlich implementieren wir alle Interfaces, die die targetClass selbst implementiert.
+					.implement(clz.getInterfaces())
+					// Matcher: Fängt alle Methoden außer denen von Object.class und dem Konstruktor ab.
+					.method(ElementMatchers.not(ElementMatchers.isDeclaredBy(Object.class).or(ElementMatchers.isConstructor())))
+					// Intercept: Leitet den Aufruf an den InvocationHandler weiter.
+					.intercept(InvocationHandlerAdapter.toField("invocationHandler"))
+					.attribute(MethodAttributeAppender.ForInstrumentedMethod.INCLUDING_RECEIVER)
+					.make()
+					.load(moduleClassLoader, ClassLoadingStrategy.Default.CHILD_FIRST)
+					.getLoaded();
+		});
+
+		T proxy = (T) proxyClass.getConstructor().newInstance();
+		
 		InvocationHandler handler = new InvocationHandler() {
 			@Override
 			public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
@@ -66,23 +87,11 @@ public class ClassLoaderInterceptor {
 				}
 			}
 		};
-
-		Class<?> targetClass = targetInstance.getClass();
-
-		Class<? extends T> dynamicType;
-		dynamicType = (Class<? extends T>) new ByteBuddy().subclass(targetClass)
-				// Zusätzlich implementieren wir alle Interfaces, die die targetClass selbst implementiert.
-				// Das ist meist optional, aber stellt maximale Kompatibilität sicher.
-				.implement(targetClass.getInterfaces())
-				// Matcher: Fängt alle Methoden außer denen von Object.class und dem Konstruktor ab.
-				.method(ElementMatchers.not(ElementMatchers.isDeclaredBy(Object.class).or(ElementMatchers.isConstructor())))
-				// Intercept: Leitet den Aufruf an den InvocationHandler weiter.
-				.intercept(InvocationHandlerAdapter.of(handler))
-				.attribute(MethodAttributeAppender.ForInstrumentedMethod.INCLUDING_RECEIVER)
-				.make()
-				.load(moduleClassLoader, ClassLoadingStrategy.Default.CHILD_FIRST)
-				.getLoaded();
 		
-		return dynamicType.getConstructor().newInstance();
+		Field field = proxyClass.getDeclaredField("invocationHandler");
+		field.setAccessible(true);
+		field.set(proxy, handler);
+		
+		return proxy;
 	}
 }

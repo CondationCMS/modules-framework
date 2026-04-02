@@ -74,6 +74,8 @@ public class ModuleImpl implements Module {
 
 	private ModuleServiceLoader moduleServiceLoader;
 
+	private ClassLoaderInterceptor interceptor;
+
 	protected ModuleImpl(final File moduleDir, final File modulesDataDir, final Context context,
 			final ModuleInjector injector, final ModuleRequestContextFactory requestContextFactory) throws MalformedURLException, IOException {
 		this.moduleDir = moduleDir;
@@ -125,6 +127,7 @@ public class ModuleImpl implements Module {
 		this.configuration = new ModuleConfiguration(dataDir);
 
 		this.moduleServiceLoader = ModuleServiceLoader.create(classloader);
+		this.interceptor = new ClassLoaderInterceptor(classloader);
 	}
 
 	@Override
@@ -135,8 +138,6 @@ public class ModuleImpl implements Module {
 
 	@Override
 	public <T extends ExtensionPoint> List<T> extensions(Class<T> extensionClass) {
-
-		ClassLoaderInterceptor interceptor = new ClassLoaderInterceptor(classloader);
 
 		return moduleServiceLoader.get(extensionClass).stream()
 				.map(ext -> {
@@ -261,6 +262,7 @@ public class ModuleImpl implements Module {
 		}
 
 		this.classloader = null;
+		this.interceptor = null;
 		this.configuration = null;
 		this.dependencyList.clear();
 		this.extensions.clear();

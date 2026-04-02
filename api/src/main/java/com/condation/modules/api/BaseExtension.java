@@ -47,7 +47,7 @@ public abstract class BaseExtension<C extends Context, R extends ModuleRequestCo
 	}
 	
 	@Override
-	public void setRequestContext(R context) {
+	public void setRequestContext(R requestContext) {
 		this.requestContext = requestContext;
 	}
 	
