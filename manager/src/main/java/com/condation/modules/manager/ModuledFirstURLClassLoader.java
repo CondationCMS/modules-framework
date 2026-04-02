@@ -79,7 +79,6 @@ public class ModuledFirstURLClassLoader extends URLClassLoader {
 
     private boolean isSystemClass(String name) {
         return name.startsWith("java.")
-            || name.startsWith("javax.")
             || name.startsWith("sun.")
             || name.startsWith("jdk.")
             || name.startsWith("org.w3c.")
