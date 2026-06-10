@@ -90,18 +90,33 @@ public class ModuledFirstURLClassLoader extends URLClassLoader {
     @Override
     public URL getResource(String name) {
         URL url = findResource(name);
-        if (url == null) url = super.getResource(name);
+        if (url == null && !name.startsWith("META-INF/services/")) {
+            url = super.getResource(name);
+        }
         return url;
+    }
+
+    @Override
+    public Enumeration<URL> findResources(String name) throws IOException {
+        return super.findResources(name);
     }
 
     @Override
     public Enumeration<URL> getResources(String name) throws IOException {
         List<URL> urls = new ArrayList<>();
         Enumeration<URL> local = findResources(name);
-        while (local.hasMoreElements()) urls.add(local.nextElement());
+        while (local.hasMoreElements()) {
+            urls.add(local.nextElement());
+        }
+
+        if (name.startsWith("META-INF/services/")) {
+            return Collections.enumeration(urls);
+        }
 
         Enumeration<URL> parent = getParent().getResources(name);
-        while (parent.hasMoreElements()) urls.add(parent.nextElement());
+        while (parent.hasMoreElements()) {
+            urls.add(parent.nextElement());
+        }
 
         return Collections.enumeration(urls);
     }

@@ -97,20 +97,35 @@ public final class ModuleServiceLoader {
 		List<Provider<?>> providerImpls = new ArrayList<>();
 		try {
 			String fullName = PREFIX + service.getName();
-			Enumeration<URL> resources = loader.getResources(fullName);
+			// We only want resources from the loader itself, not the parent if it's a service
+			Enumeration<URL> resources;
+			if (loader instanceof ModuledFirstURLClassLoader) {
+				resources = ((ModuledFirstURLClassLoader) loader).findResources(fullName);
+			} else {
+				resources = loader.getResources(fullName);
+			}
+
 			while (resources.hasMoreElements()) {
 				var url = resources.nextElement();
 				try (var ins = url.openStream(); var reader = new BufferedReader(new InputStreamReader(ins))) {
 
 					String line;
 					while ((line = reader.readLine()) != null) {
+						int ci = line.indexOf('#');
+						if (ci >= 0) {
+							line = line.substring(0, ci);
+						}
+						line = line.trim();
+						if (line.isEmpty()) {
+							continue;
+						}
 						var serviceImplClass = (Class<S>) Class.forName(line, false, loader);
 						providerImpls.add(new Provider<>(serviceImplClass));
 					}
 				}
 			}
 		} catch (Exception e) {
-			log.error("", e);
+			log.error("Error loading service " + service.getName(), e);
 		}
 
 		return providerImpls;
