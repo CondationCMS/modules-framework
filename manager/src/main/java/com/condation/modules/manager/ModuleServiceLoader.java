@@ -30,8 +30,10 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Predicate;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -42,25 +44,38 @@ import lombok.extern.slf4j.Slf4j;
 public final class ModuleServiceLoader {
 
 	static final String PREFIX = "META-INF/services/";
+	static final String METADATA_PREFIX = "META-INF/condation/extensions/";
 
 	private final ClassLoader loader;
+	private final Predicate<String> activeModulePredicate;
 
 	private final ConcurrentMap<Class<?>, List<Provider<?>>> providers = new ConcurrentHashMap<>();
 
 	private ModuleServiceLoader(ClassLoader loader) {
+		this(loader, moduleId -> true);
+	}
+
+	private ModuleServiceLoader(ClassLoader loader, Predicate<String> activeModulePredicate) {
 		this.loader = loader;
+		this.activeModulePredicate = activeModulePredicate;
 	}
 
 	public static ModuleServiceLoader create(ClassLoader loader) {
 		return new ModuleServiceLoader(loader);
 	}
 
+	public static ModuleServiceLoader create(ClassLoader loader, Predicate<String> activeModulePredicate) {
+		return new ModuleServiceLoader(loader, activeModulePredicate);
+	}
+
 	public <S> List<Class<? extends S>> getClasses(Class<S> service) {
 		try {
 			return (List) providers.computeIfAbsent(service, clazz -> {
-				return initService(clazz);
-			}).stream()
-					.map(p -> p.type)
+					return initService(clazz);
+				}).stream()
+					.filter(Provider::isAvailable)
+					.map(Provider::type)
+					.filter(Objects::nonNull)
 					.toList();
 		} catch (Exception ex) {
 			log.error("", ex);
@@ -71,8 +86,9 @@ public final class ModuleServiceLoader {
 	public <S> List<S> get(Class<S> service) {
 		try {
 			return providers.computeIfAbsent(service, clazz -> {
-				return initService(clazz);
-			}).stream()
+					return initService(clazz);
+				}).stream()
+					.filter(Provider::isAvailable)
 					.map(this::newInstance)
 					.filter(Objects::nonNull)
 					.map(service::cast)
@@ -97,6 +113,7 @@ public final class ModuleServiceLoader {
 		List<Provider<?>> providerImpls = new ArrayList<>();
 		try {
 			String fullName = PREFIX + service.getName();
+			Properties metadata = loadMetadata(service.getName());
 			// We only want resources from the loader itself, not the parent if it's a service
 			Enumeration<URL> resources;
 			if (loader instanceof ModuledFirstURLClassLoader) {
@@ -119,8 +136,8 @@ public final class ModuleServiceLoader {
 						if (line.isEmpty()) {
 							continue;
 						}
-						var serviceImplClass = (Class<S>) Class.forName(line, false, loader);
-						providerImpls.add(new Provider<>(serviceImplClass));
+						List<String> requirements = SharedAPIRegistry.parseList(metadata.getProperty(line));
+						providerImpls.add(new Provider<>(line, requirements));
 					}
 				}
 			}
@@ -131,10 +148,61 @@ public final class ModuleServiceLoader {
 		return providerImpls;
 	}
 
-	private record Provider<S>(Class<S> type) {
+	private Properties loadMetadata(final String serviceName) {
+		Properties metadata = new Properties();
+		try {
+			String fullName = METADATA_PREFIX + serviceName + ".properties";
+			Enumeration<URL> resources;
+			if (loader instanceof ModuledFirstURLClassLoader) {
+				resources = ((ModuledFirstURLClassLoader) loader).findResources(fullName);
+			} else {
+				resources = loader.getResources(fullName);
+			}
+			while (resources.hasMoreElements()) {
+				URL url = resources.nextElement();
+				try (var input = url.openStream()) {
+					metadata.load(input);
+				}
+			}
+		} catch (Exception ex) {
+			log.debug("Error loading extension metadata for " + serviceName, ex);
+		}
+		return metadata;
+	}
+
+	private class Provider<S> {
+
+		private final String className;
+		private final List<String> requirements;
+		private Class<S> type;
+
+		Provider(final String className, final List<String> requirements) {
+			this.className = className;
+			this.requirements = requirements;
+		}
+
+		boolean isAvailable() {
+			return requirements.stream().allMatch(activeModulePredicate);
+		}
+
+		Class<S> type() {
+			if (!isAvailable()) {
+				return null;
+			}
+			if (type == null) {
+				try {
+					type = (Class<S>) Class.forName(className, false, loader);
+				} catch (ClassNotFoundException | NoClassDefFoundError | TypeNotPresentException ex) {
+					log.debug("Skipping extension provider " + className, ex);
+					return null;
+				}
+			}
+			return type;
+		}
 
 		public S get() throws Exception {
-			return (S) type.getConstructors()[0].newInstance();
+			Class<S> providerType = type();
+			return providerType != null ? (S) providerType.getConstructors()[0].newInstance() : null;
 		}
 	}
 }

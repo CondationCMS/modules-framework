@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>com.condation.modules.framework</groupId>
+		<artifactId>modules-framework</artifactId>
+		<version>1.5.0</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+	<artifactId>module2</artifactId>
+	<packaging>jar</packaging>
+	<name>Example Module 2</name>
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<module.id>module2</module.id>
+		<module.name>example module 2</module.name>
+		<module.priority>HIGH</module.priority>
+	</properties>
+	<dependencies>
+		
+		<dependency>
+			<groupId>com.condation.modules.framework</groupId>
+			<artifactId>modules-api</artifactId>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.condation.modules.framework</groupId>
+			<artifactId>example-api</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+	</dependencies>
+	<build>
+		<plugins>
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<version>3.8.0</version>
+				<configuration>
+					<descriptors>
+						<descriptor>src/main/assembly/assembly.xml</descriptor>
+					</descriptors>
+					<finalName>${module.id}</finalName>
+				</configuration>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>

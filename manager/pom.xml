@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.condation.modules.framework</groupId>
 		<artifactId>modules-framework</artifactId>
-		<version>1.4.2</version>
+		<version>1.5.0</version>
 	</parent>
 	<artifactId>modules-manager</artifactId>
 	<packaging>jar</packaging>
@@ -30,6 +30,12 @@
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>6.1.0</version>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 	

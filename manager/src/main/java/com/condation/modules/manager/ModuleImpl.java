@@ -42,6 +42,7 @@ import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Predicate;
 
 /**
  *
@@ -56,6 +57,9 @@ public class ModuleImpl implements Module {
 	private String author;
 	private Priority priority = Priority.NORMAL;
 	private final List<Dependency> dependencyList = new ArrayList<>();
+	private final List<String> apiExports = new ArrayList<>();
+	private final List<String> apiPackages = new ArrayList<>();
+	private final List<String> apiImports = new ArrayList<>();
 
 	File moduleDir;
 
@@ -103,10 +107,21 @@ public class ModuleImpl implements Module {
 			String config_prio = properties.getProperty("priority", "NORMAL");
 			this.priority = Priority.valueOf(config_prio);
 			this.cacheExtensions = Boolean.parseBoolean(properties.getProperty("extensions.cache", "false"));
+			this.apiExports.addAll(SharedAPIRegistry.parseList(properties.getProperty("api.exports")));
+			this.apiPackages.addAll(SharedAPIRegistry.parseList(properties.getProperty("api.packages")));
+			this.apiImports.addAll(SharedAPIRegistry.parseList(properties.getProperty("api.imports")));
 		}
 	}
 
 	public void init(final ModuleAPIClassLoader parentClassLoader) throws MalformedURLException, IOException {
+		init(parentClassLoader, null);
+	}
+
+	public void init(final ModuleAPIClassLoader parentClassLoader, final SharedAPIRegistry sharedAPIRegistry) throws MalformedURLException, IOException {
+		init(parentClassLoader, sharedAPIRegistry, moduleId -> true);
+	}
+
+	public void init(final ModuleAPIClassLoader parentClassLoader, final SharedAPIRegistry sharedAPIRegistry, final Predicate<String> activeModulePredicate) throws MalformedURLException, IOException {
 		List<URL> urls = new ArrayList<>();
 
 		File[] libs = new File(moduleDir, "libs").listFiles((File dir, String name1) -> name1.endsWith(".jar"));
@@ -115,7 +130,7 @@ public class ModuleImpl implements Module {
 			lib = null;
 		}
 
-		classloader = new ModuledFirstURLClassLoader(urls.toArray(new URL[libs.length]), parentClassLoader);
+		classloader = new ModuledFirstURLClassLoader(urls.toArray(new URL[libs.length]), parentClassLoader, sharedAPIRegistry, id, apiImports);
 		urls.clear();
 		urls = null;
 		libs = null;
@@ -126,7 +141,7 @@ public class ModuleImpl implements Module {
 		}
 		this.configuration = new ModuleConfiguration(dataDir);
 
-		this.moduleServiceLoader = ModuleServiceLoader.create(classloader);
+		this.moduleServiceLoader = ModuleServiceLoader.create(classloader, activeModulePredicate);
 		this.interceptor = new ClassLoaderInterceptor(classloader);
 	}
 
@@ -236,6 +251,18 @@ public class ModuleImpl implements Module {
 
 	public List<Dependency> getDependencies() {
 		return this.dependencyList;
+	}
+
+	public List<String> getApiExports() {
+		return this.apiExports;
+	}
+
+	public List<String> getApiPackages() {
+		return this.apiPackages;
+	}
+
+	public List<String> getApiImports() {
+		return this.apiImports;
 	}
 
 	public File getModuleDir() {

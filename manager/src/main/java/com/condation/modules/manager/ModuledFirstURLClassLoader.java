@@ -35,11 +35,22 @@ import java.util.*;
 public class ModuledFirstURLClassLoader extends URLClassLoader {
 
     private final ModuleAPIClassLoader moduleAPIClassLoader;
+    private final SharedAPIRegistry sharedAPIRegistry;
+    private final String moduleId;
+    private final List<String> apiImports;
 
     public ModuledFirstURLClassLoader(URL[] classpath, ModuleAPIClassLoader moduleAPIClassLoader) {
+        this(classpath, moduleAPIClassLoader, null, null, Collections.emptyList());
+    }
+
+    public ModuledFirstURLClassLoader(URL[] classpath, ModuleAPIClassLoader moduleAPIClassLoader,
+            SharedAPIRegistry sharedAPIRegistry, String moduleId, List<String> apiImports) {
         // Use system classloader as parent to avoid unwanted delegation
         super(classpath, ClassLoader.getSystemClassLoader());
         this.moduleAPIClassLoader = moduleAPIClassLoader;
+        this.sharedAPIRegistry = sharedAPIRegistry;
+        this.moduleId = moduleId;
+        this.apiImports = apiImports != null ? List.copyOf(apiImports) : Collections.emptyList();
     }
 
     @Override
@@ -54,6 +65,16 @@ public class ModuledFirstURLClassLoader extends URLClassLoader {
 		// System and JDK classes → always from parent/system
         if (isSystemClass(name)) {
             return super.loadClass(name, resolve);
+        }
+
+        if (sharedAPIRegistry != null) {
+            try {
+                Class<?> clazz = sharedAPIRegistry.loadClass(moduleId, apiImports, name);
+                if (resolve) resolveClass(clazz);
+                return clazz;
+            } catch (ClassNotFoundException ignored) {
+                // Fallthrough
+            }
         }
 
 		// Try to find class in this module first (child-first)
