@@ -84,7 +84,10 @@ class SharedAPIRegistry implements Closeable {
 			}
 		}
 
-		throw new ClassNotFoundException(className + " not visible through shared API imports");
+		throw new ClassNotFoundException(
+		    "Class '" + className + "' not visible to module '" + requestingModuleId
+		    + "' — searched own exports and imports: " + importedModules
+		);
 	}
 
 	void removeModule(final String moduleId) throws IOException {
