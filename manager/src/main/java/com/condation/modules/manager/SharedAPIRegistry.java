@@ -110,10 +110,22 @@ class SharedAPIRegistry implements Closeable {
 
 	@Override
 	public void close() throws IOException {
+		IOException first = null;
 		for (SharedAPIClassLoader loader : apiLoaders.values()) {
-			loader.close();
+			try {
+				loader.close();
+			} catch (IOException ex) {
+				if (first == null) {
+					first = ex;
+				} else {
+					first.addSuppressed(ex);
+				}
+			}
 		}
 		apiLoaders.clear();
+		if (first != null) {
+			throw first;
+		}
 	}
 
 	static List<String> parseList(final String value) {
