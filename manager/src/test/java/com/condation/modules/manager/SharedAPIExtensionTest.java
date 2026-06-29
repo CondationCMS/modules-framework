@@ -132,7 +132,7 @@ class SharedAPIExtensionTest {
 
 		manager.deactivateModule("module1");
 
-		assertTrue(!manager.sharedAPIRegistry.apiLoaders.containsKey("module1"),
+		assertFalse(manager.sharedAPIRegistry.apiLoaders.containsKey("module1"),
 				"module1 loader should be removed after deactivation");
 
 		manager.close();
