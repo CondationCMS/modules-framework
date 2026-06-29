@@ -87,6 +87,31 @@ class SharedAPIExtensionTest {
 		}
 	}
 
+	@Test
+	void throwsIOExceptionWhenLibsDirMissing() throws Exception {
+		Path modulesDir = tempDir.resolve("modules");
+		Files.createDirectories(modulesDir);
+		// Unzip a real module, then delete its libs dir
+		unzip(testZip("module1"), modulesDir);
+		Path libsDir = modulesDir.resolve("module1").resolve("libs");
+		// Remove all files in libs, then remove the dir itself
+		if (Files.exists(libsDir)) {
+			try (var stream = Files.walk(libsDir)) {
+				stream.sorted(java.util.Comparator.reverseOrder())
+					  .map(Path::toFile)
+					  .forEach(java.io.File::delete);
+			}
+		}
+
+		try (ModuleManager manager = ModuleManagerImpl.create(
+				modulesDir.toFile(), tempDir.resolve("data").toFile(), new TestContext())) {
+			org.junit.jupiter.api.Assertions.assertThrows(
+				IOException.class,
+				() -> manager.activateModule("module1")
+			);
+		}
+	}
+
 	private Path testZip(final String moduleId) {
 		Path baseDir = Path.of(System.getProperty("user.dir"));
 		Path repositoryRoot = baseDir.getFileName().toString().equals("manager") ? baseDir.getParent() : baseDir;

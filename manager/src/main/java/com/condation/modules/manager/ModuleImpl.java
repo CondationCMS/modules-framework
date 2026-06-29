@@ -124,10 +124,16 @@ public class ModuleImpl implements Module {
 	public void init(final ModuleAPIClassLoader parentClassLoader, final SharedAPIRegistry sharedAPIRegistry, final Predicate<String> activeModulePredicate) throws MalformedURLException, IOException {
 		List<URL> urls = new ArrayList<>();
 
-		File[] libs = new File(moduleDir, "libs").listFiles((File dir, String name1) -> name1.endsWith(".jar"));
+		File libsDir = new File(moduleDir, "libs");
+		if (!libsDir.exists() || !libsDir.isDirectory()) {
+			throw new IOException("Module '" + id + "': libs directory not found at " + libsDir.getAbsolutePath());
+		}
+		File[] libs = libsDir.listFiles((File dir, String name1) -> name1.endsWith(".jar"));
+		if (libs == null) {
+			throw new IOException("Module '" + id + "': could not list files in " + libsDir.getAbsolutePath());
+		}
 		for (File lib : libs) {
 			urls.add(new URL("jar:" + lib.toURI().toURL() + "!/"));
-			lib = null;
 		}
 
 		classloader = new ModuledFirstURLClassLoader(urls.toArray(new URL[libs.length]), parentClassLoader, sharedAPIRegistry, id, apiImports);
