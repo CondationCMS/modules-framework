@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
 
 class SharedAPIRegistry implements Closeable {
 
-	private final Map<String, SharedAPIClassLoader> apiLoaders = new HashMap<>();
+	final Map<String, SharedAPIClassLoader> apiLoaders = new HashMap<>();
 	private final Predicate<String> activeModulePredicate;
 
 	SharedAPIRegistry(final ClassLoader parent, final List<ModuleImpl> modules, final Predicate<String> activeModulePredicate) throws IOException {
@@ -78,6 +78,13 @@ class SharedAPIRegistry implements Closeable {
 		}
 
 		throw new ClassNotFoundException(className + " not visible through shared API imports");
+	}
+
+	void removeModule(final String moduleId) throws IOException {
+		SharedAPIClassLoader loader = apiLoaders.remove(moduleId);
+		if (loader != null) {
+			loader.close();
+		}
 	}
 
 	private File resolveExport(final File moduleDir, final String export) {

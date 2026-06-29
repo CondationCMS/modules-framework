@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SharedAPIExtensionTest {
@@ -110,6 +111,31 @@ class SharedAPIExtensionTest {
 				() -> manager.activateModule("module1")
 			);
 		}
+	}
+
+	@Test
+	void sharedAPILoaderRemovedAfterModuleDeactivation() throws Exception {
+		Path modulesDir = tempDir.resolve("modules");
+		Files.createDirectories(modulesDir);
+		unzip(testZip("module1"), modulesDir);
+		unzip(testZip("module2"), modulesDir);
+
+		ModuleManagerImpl manager = (ModuleManagerImpl) ModuleManagerImpl.create(
+				modulesDir.toFile(), tempDir.resolve("data").toFile(), new TestContext());
+
+		manager.activateModule("module1");
+		manager.activateModule("module2");
+
+		// module1 has api.exports → its SharedAPIClassLoader must be registered
+		assertTrue(manager.sharedAPIRegistry.apiLoaders.containsKey("module1"),
+				"module1 loader should be present before deactivation");
+
+		manager.deactivateModule("module1");
+
+		assertTrue(!manager.sharedAPIRegistry.apiLoaders.containsKey("module1"),
+				"module1 loader should be removed after deactivation");
+
+		manager.close();
 	}
 
 	private Path testZip(final String moduleId) {

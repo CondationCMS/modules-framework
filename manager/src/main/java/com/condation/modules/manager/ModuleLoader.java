@@ -82,6 +82,10 @@ public class ModuleLoader {
 		activeModules().get(moduleId).close();
 		activeModules().remove(moduleId);
 
+		if (sharedAPIRegistry != null) {
+			sharedAPIRegistry.removeModule(moduleId);
+		}
+
 		return true;
 	}
 
