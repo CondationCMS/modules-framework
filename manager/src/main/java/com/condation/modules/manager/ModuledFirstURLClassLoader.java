@@ -29,8 +29,13 @@ import java.net.URLClassLoader;
 import java.util.*;
 
 /**
- * A strict child-first ClassLoader that isolates module dependencies
- * and only delegates to the ModuleAPIClassLoader when explicitly allowed.
+ * Per-module classloader. Resolution order:
+ * 1. Already-loaded classes
+ * 2. JDK / system classes (java.*, sun.*, etc.)
+ * 3. SharedAPIRegistry — shared inter-module API classes (checked before own JARs to guarantee class identity)
+ * 4. Own module JARs (child-first for non-API classes)
+ * 5. ModuleAPIClassLoader — host-application classes explicitly allowed via allowlist
+ * 6. System/parent classloader fallback
  */
 public class ModuledFirstURLClassLoader extends URLClassLoader {
 
