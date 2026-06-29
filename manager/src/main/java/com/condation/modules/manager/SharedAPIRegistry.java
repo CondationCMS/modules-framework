@@ -25,6 +25,7 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,7 +34,12 @@ import java.util.Map;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 class SharedAPIRegistry implements Closeable {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(SharedAPIRegistry.class);
 
 	final Map<String, SharedAPIClassLoader> apiLoaders = new HashMap<>();
 	private final Predicate<String> activeModulePredicate;
@@ -44,19 +50,20 @@ class SharedAPIRegistry implements Closeable {
 			if (module.getApiExports().isEmpty() || module.getApiPackages().isEmpty()) {
 				continue;
 			}
-			URL[] urls = module.getApiExports().stream()
-					.map(export -> resolveExport(module.getModuleDir(), export))
-					.filter(File::exists)
-					.map(file -> {
-						try {
-							return file.toURI().toURL();
-						} catch (IOException ex) {
-							throw new RuntimeException(ex);
-						}
-					})
-					.toArray(URL[]::new);
+			List<URL> resolvedUrls = new ArrayList<>();
+			for (String export : module.getApiExports()) {
+				File exportFile = resolveExport(module.getModuleDir(), export);
+				if (!exportFile.exists()) {
+					LOGGER.warn("Module '{}': api.export '{}' not found at {}", module.getId(), export, exportFile.getAbsolutePath());
+				} else {
+					resolvedUrls.add(exportFile.toURI().toURL());
+				}
+			}
+			URL[] urls = resolvedUrls.toArray(new URL[0]);
 			if (urls.length > 0) {
 				apiLoaders.put(module.getId(), new SharedAPIClassLoader(urls, parent, module.getApiPackages()));
+			} else if (!module.getApiExports().isEmpty()) {
+				LOGGER.warn("Module '{}': no api.export files found on disk — module will not export any shared API classes", module.getId());
 			}
 		}
 	}
