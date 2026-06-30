@@ -48,6 +48,7 @@ public class ModuleLoader {
 	final File modulesDataPath;
 
 	final ModuleAPIClassLoader globalClassLoader;
+	SharedAPIRegistry sharedAPIRegistry;
 
 	final Context context;
 	final ModuleInjector injector;
@@ -66,18 +67,41 @@ public class ModuleLoader {
 		return activeModules;
 	}
 
+	protected void setSharedAPIRegistry(final SharedAPIRegistry sharedAPIRegistry) {
+		this.sharedAPIRegistry = sharedAPIRegistry;
+	}
+
 	protected boolean deactivateModule(final String moduleId) throws IOException {
 
+		deactivateModuleLifecycle(moduleId);
+		closeModule(moduleId);
+
+		return true;
+	}
+
+	protected void deactivateModuleLifecycle(final String moduleId) {
 		ModuleImpl module = activeModules().get(moduleId);
+		if (module == null) {
+			return;
+		}
 		module.extensions(ModuleLifeCycleExtension.class).stream().forEach((ModuleLifeCycleExtension mle) -> {
 			mle.setContext(context);
 			mle.deactivate();
 		});
+	}
 
-		activeModules().get(moduleId).close();
+	protected void closeModule(final String moduleId) throws IOException {
+		ModuleImpl module = activeModules().get(moduleId);
+		if (module == null) {
+			return;
+		}
+
+		module.close();
 		activeModules().remove(moduleId);
 
-		return true;
+		if (sharedAPIRegistry != null) {
+			sharedAPIRegistry.removeModule(moduleId);
+		}
 	}
 
 	protected boolean activateModule(final String moduleId) throws IOException {
@@ -94,7 +118,7 @@ public class ModuleLoader {
 				config = new ManagerConfiguration.ModuleConfig(moduleId);
 			}
 
-			module.init(this.globalClassLoader);
+			module.init(this.globalClassLoader, this.sharedAPIRegistry, activeModules::containsKey);
 
 			config.setActive(true);
 			module.extensions(ModuleLifeCycleExtension.class).stream().forEach((ModuleLifeCycleExtension mle) -> {
@@ -131,7 +155,12 @@ public class ModuleLoader {
 	private void loadFulfilledModules(final List<ModuleImpl> modules) {
 		for (final ModuleImpl module : modules) {
 			if (areDependencyFulfilled(module) && configuration.get(module.getId()).isActive()) {
-				activeModules.put(module.getId(), module);
+				try {
+					module.init(this.globalClassLoader, this.sharedAPIRegistry, activeModules::containsKey);
+					activeModules.put(module.getId(), module);
+				} catch (IOException ex) {
+					throw new RuntimeException(ex);
+				}
 			}
 		}
 		modules.removeAll(activeModules.values());

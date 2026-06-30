@@ -1,10 +1,10 @@
-package com.condation.modules.api.annotation;
+package com.condation.modules.example.module1;
 
 /*-
  * #%L
- * modules-api
+ * Example Module 1
  * %%
- * Copyright (C) 2023 - 2024 CondationCMS
+ * Copyright (C) 2023 - 2026 CondationCMS
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -22,27 +22,5 @@ package com.condation.modules.api.annotation;
  * #L%
  */
 
-
-
-import com.condation.modules.api.ExtensionPoint;
-import java.lang.annotation.Documented;
-import static java.lang.annotation.ElementType.TYPE;
-import java.lang.annotation.Repeatable;
-import java.lang.annotation.Retention;
-import static java.lang.annotation.RetentionPolicy.RUNTIME;
-import java.lang.annotation.Target;
-
-@Documented
-@Retention(RUNTIME)
-@Target(TYPE)
-@Repeatable(Extensions.class)
-public @interface Extension {
-	Class<? extends ExtensionPoint> value();
-	
-	String[] requires() default {};
-	
-	public enum Caching {
-		DEFAULT, TRUE, FALSE
-	}
-	Caching cached() default Caching.DEFAULT;
+public class Module1Marker {
 }

@@ -161,6 +161,7 @@ public class ModuleManagerImpl implements ModuleManager {
 	final ModuleLoader moduleLoader;
 
 	final ModuleAPIClassLoader globalClassLoader;
+	final SharedAPIRegistry sharedAPIRegistry;
 
 	private ManagerConfiguration configuration;
 
@@ -176,6 +177,7 @@ public class ModuleManagerImpl implements ModuleManager {
 		this.modulesDataPath = null;
 		this.modulesPath = null;
 		this.globalClassLoader = null;
+		this.sharedAPIRegistry = null;
 		this.moduleLoader = null;
 		this.context = null;
 		this.injector = null;
@@ -190,9 +192,6 @@ public class ModuleManagerImpl implements ModuleManager {
 
 		this.configuration = new ManagerConfiguration();
 		this.globalClassLoader = builder.classLoader;
-		this.moduleLoader = new ModuleLoader(configuration, modulesPath, modulesDataPath, this.globalClassLoader,
-				this.context, this.injector);
-
 		File[] moduleFiles = modulesPath.listFiles((File file) -> file.isDirectory());
 		File moduleData = modulesDataPath;
 
@@ -201,6 +200,15 @@ public class ModuleManagerImpl implements ModuleManager {
 		Map<String, ModuleImpl> modules = new HashMap<>();
 		if (moduleFiles != null) {
 			loadModules(moduleFiles, moduleData, allUsedModuleIDs, modules);
+		}
+		this.moduleLoader = new ModuleLoader(configuration, modulesPath, modulesDataPath, this.globalClassLoader,
+				this.context, this.injector);
+		try {
+			this.sharedAPIRegistry = new SharedAPIRegistry(globalClassLoader.getParent(), new ArrayList<>(modules.values()),
+					moduleId -> moduleLoader.activeModules().containsKey(moduleId));
+			this.moduleLoader.setSharedAPIRegistry(this.sharedAPIRegistry);
+		} catch (IOException ex) {
+			throw new RuntimeException("Failed to initialize shared API registry", ex);
 		}
 		configuration.getModules().values().stream().filter((mc) -> (!allUsedModuleIDs.contains(mc.getId()))).forEach((mc) -> {
 			configuration.remove(mc.getId());
@@ -257,11 +265,29 @@ public class ModuleManagerImpl implements ModuleManager {
 
 	@Override
 	public void close() {
-		extensions(ModuleLifeCycleExtension.class).stream().forEach((ModuleLifeCycleExtension mle) -> {
-			mle.setContext(context);
-			mle.deactivate();
+		List<String> activeModuleIds = new ArrayList<>(moduleLoader.activeModules().keySet());
+		activeModuleIds.forEach((moduleId) -> {
+			try {
+				moduleLoader.deactivateModuleLifecycle(moduleId);
+			} catch (RuntimeException ex) {
+				LOGGER.warn("Failed to run lifecycle deactivation for module '{}'", moduleId, ex);
+			}
+		});
+		activeModuleIds.forEach((moduleId) -> {
+			try {
+				moduleLoader.closeModule(moduleId);
+			} catch (IOException ex) {
+				LOGGER.warn("Failed to close module '{}'", moduleId, ex);
+			}
 		});
 		systemExtensionsCache.clear();
+		if (sharedAPIRegistry != null) {
+			try {
+				sharedAPIRegistry.close();
+			} catch (IOException ex) {
+				LOGGER.warn("Failed to close shared API registry", ex);
+			}
+		}
 	}
 
 	/**

@@ -1,10 +1,10 @@
-package com.condation.modules.api.annotation;
+package com.condation.modules.example.module2;
 
 /*-
  * #%L
- * modules-api
+ * Example Module 2
  * %%
- * Copyright (C) 2023 - 2024 CondationCMS
+ * Copyright (C) 2023 - 2026 CondationCMS
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -22,27 +22,21 @@ package com.condation.modules.api.annotation;
  * #L%
  */
 
+import com.condation.modules.api.BaseExtension;
+import com.condation.modules.api.Context;
+import com.condation.modules.api.annotation.Extension;
+import com.condation.modules.example.api.ExampleExtension;
+import com.condation.modules.example.api.ExamplePayload;
 
+@Extension(value = ExampleExtension.class, requires = "module1")
+public class Module2ExampleExtension extends BaseExtension<Context> implements ExampleExtension {
 
-import com.condation.modules.api.ExtensionPoint;
-import java.lang.annotation.Documented;
-import static java.lang.annotation.ElementType.TYPE;
-import java.lang.annotation.Repeatable;
-import java.lang.annotation.Retention;
-import static java.lang.annotation.RetentionPolicy.RUNTIME;
-import java.lang.annotation.Target;
-
-@Documented
-@Retention(RUNTIME)
-@Target(TYPE)
-@Repeatable(Extensions.class)
-public @interface Extension {
-	Class<? extends ExtensionPoint> value();
-	
-	String[] requires() default {};
-	
-	public enum Caching {
-		DEFAULT, TRUE, FALSE
+	@Override
+	public void init() {
 	}
-	Caching cached() default Caching.DEFAULT;
+
+	@Override
+	public ExamplePayload payload() {
+		return new ExamplePayload("module2");
+	}
 }

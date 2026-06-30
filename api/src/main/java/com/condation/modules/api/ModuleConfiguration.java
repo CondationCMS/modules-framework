@@ -48,7 +48,9 @@ public class ModuleConfiguration {
 		if (!configFile.exists()) {
 			configFile.createNewFile();
 		}
-		properties.load(new FileReader(configFile));
+		try (FileReader reader = new FileReader(configFile)) {
+			properties.load(reader);
+		}
 		
 		this.dataDirectory = new File(path.toURI());
 	}
@@ -64,7 +66,9 @@ public class ModuleConfiguration {
 	 * @throws IOException 
 	 */
 	public void store () throws IOException {
-		properties.store(new FileWriter(configFile), "module configuraion saved");
+		try (FileWriter writer = new FileWriter(configFile)) {
+			properties.store(writer, "module configuraion saved");
+		}
 	}
 	/**
 	 * Returns a configuration property value.

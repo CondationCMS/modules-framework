@@ -29,17 +29,33 @@ import java.net.URLClassLoader;
 import java.util.*;
 
 /**
- * A strict child-first ClassLoader that isolates module dependencies
- * and only delegates to the ModuleAPIClassLoader when explicitly allowed.
+ * Per-module classloader. Resolution order:
+ * 1. Already-loaded classes
+ * 2. JDK / system classes (java.*, sun.*, etc.)
+ * 3. SharedAPIRegistry — shared inter-module API classes (checked before own JARs to guarantee class identity)
+ * 4. Own module JARs (child-first for non-API classes)
+ * 5. ModuleAPIClassLoader — host-application classes explicitly allowed via allowlist
+ * 6. System/parent classloader fallback
  */
 public class ModuledFirstURLClassLoader extends URLClassLoader {
 
     private final ModuleAPIClassLoader moduleAPIClassLoader;
+    private final SharedAPIRegistry sharedAPIRegistry;
+    private final String moduleId;
+    private final List<String> apiImports;
 
     public ModuledFirstURLClassLoader(URL[] classpath, ModuleAPIClassLoader moduleAPIClassLoader) {
+        this(classpath, moduleAPIClassLoader, null, null, Collections.emptyList());
+    }
+
+    public ModuledFirstURLClassLoader(URL[] classpath, ModuleAPIClassLoader moduleAPIClassLoader,
+            SharedAPIRegistry sharedAPIRegistry, String moduleId, List<String> apiImports) {
         // Use system classloader as parent to avoid unwanted delegation
         super(classpath, ClassLoader.getSystemClassLoader());
         this.moduleAPIClassLoader = moduleAPIClassLoader;
+        this.sharedAPIRegistry = sharedAPIRegistry;
+        this.moduleId = moduleId;
+        this.apiImports = apiImports != null ? List.copyOf(apiImports) : Collections.emptyList();
     }
 
     @Override
@@ -54,6 +70,16 @@ public class ModuledFirstURLClassLoader extends URLClassLoader {
 		// System and JDK classes → always from parent/system
         if (isSystemClass(name)) {
             return super.loadClass(name, resolve);
+        }
+
+        if (sharedAPIRegistry != null) {
+            try {
+                Class<?> clazz = sharedAPIRegistry.loadClass(moduleId, apiImports, name);
+                if (resolve) resolveClass(clazz);
+                return clazz;
+            } catch (ClassNotFoundException ignored) {
+                // Fallthrough
+            }
         }
 
 		// Try to find class in this module first (child-first)

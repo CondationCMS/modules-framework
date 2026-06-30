@@ -34,6 +34,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 import javax.annotation.processing.AbstractProcessor;
@@ -67,6 +68,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor implements P
 			return false;
 		}
 		Map<String, Set<String>> extensions = new HashMap<>();
+		Map<String, Map<String, Set<String>>> extensionRequirements = new HashMap<>();
 
 		Elements elements = processingEnv.getElementUtils();
 
@@ -86,6 +88,12 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor implements P
 								extensions.put(extensionName, new TreeSet<>());
 							}
 							extensions.get(extensionName).add(extensionImplName);
+							if (a.requires().length > 0) {
+								extensionRequirements
+										.computeIfAbsent(extensionName, key -> new HashMap<>())
+										.computeIfAbsent(extensionImplName, key -> new TreeSet<>())
+										.addAll(Arrays.asList(a.requires()));
+							}
 						});
 					}
 				}
@@ -130,6 +138,35 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor implements P
 				pw.close();
 			} catch (IOException x) {
 				processingEnv.getMessager().printMessage(Kind.ERROR, "Error creating extension file: " + x);
+			}
+		});
+
+		extensionRequirements.entrySet().stream().forEach((e) -> {
+			try {
+				String extension = e.getKey();
+				Properties properties = new Properties();
+				try {
+					FileObject extensionFileObject = filer.getResource(StandardLocation.CLASS_OUTPUT, "", "META-INF/condation/extensions/" + extension + ".properties");
+					try (var input = extensionFileObject.openInputStream()) {
+						properties.load(input);
+					}
+				} catch (FileNotFoundException | NoSuchFileException fnfe) {
+					// file not found
+				}
+
+				e.getValue().entrySet().forEach((requirement) -> {
+					properties.setProperty(requirement.getKey(), String.join(",", requirement.getValue()));
+				});
+
+				if (!properties.isEmpty()) {
+					processingEnv.getMessager().printMessage(Kind.NOTE, "Creating META-INF/condation/extensions/" + extension + ".properties");
+					FileObject f = filer.createResource(StandardLocation.CLASS_OUTPUT, "", "META-INF/condation/extensions/" + extension + ".properties");
+					try (var output = f.openOutputStream()) {
+						properties.store(output, "Condation extension metadata");
+					}
+				}
+			} catch (IOException x) {
+				processingEnv.getMessager().printMessage(Kind.ERROR, "Error creating extension metadata file: " + x);
 			}
 		});
 
