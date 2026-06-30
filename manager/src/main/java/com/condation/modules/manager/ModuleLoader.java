@@ -73,20 +73,35 @@ public class ModuleLoader {
 
 	protected boolean deactivateModule(final String moduleId) throws IOException {
 
+		deactivateModuleLifecycle(moduleId);
+		closeModule(moduleId);
+
+		return true;
+	}
+
+	protected void deactivateModuleLifecycle(final String moduleId) {
 		ModuleImpl module = activeModules().get(moduleId);
+		if (module == null) {
+			return;
+		}
 		module.extensions(ModuleLifeCycleExtension.class).stream().forEach((ModuleLifeCycleExtension mle) -> {
 			mle.setContext(context);
 			mle.deactivate();
 		});
+	}
 
-		activeModules().get(moduleId).close();
+	protected void closeModule(final String moduleId) throws IOException {
+		ModuleImpl module = activeModules().get(moduleId);
+		if (module == null) {
+			return;
+		}
+
+		module.close();
 		activeModules().remove(moduleId);
 
 		if (sharedAPIRegistry != null) {
 			sharedAPIRegistry.removeModule(moduleId);
 		}
-
-		return true;
 	}
 
 	protected boolean activateModule(final String moduleId) throws IOException {

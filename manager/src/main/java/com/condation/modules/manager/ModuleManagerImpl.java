@@ -265,9 +265,20 @@ public class ModuleManagerImpl implements ModuleManager {
 
 	@Override
 	public void close() {
-		extensions(ModuleLifeCycleExtension.class).stream().forEach((ModuleLifeCycleExtension mle) -> {
-			mle.setContext(context);
-			mle.deactivate();
+		List<String> activeModuleIds = new ArrayList<>(moduleLoader.activeModules().keySet());
+		activeModuleIds.forEach((moduleId) -> {
+			try {
+				moduleLoader.deactivateModuleLifecycle(moduleId);
+			} catch (RuntimeException ex) {
+				LOGGER.warn("Failed to run lifecycle deactivation for module '{}'", moduleId, ex);
+			}
+		});
+		activeModuleIds.forEach((moduleId) -> {
+			try {
+				moduleLoader.closeModule(moduleId);
+			} catch (IOException ex) {
+				LOGGER.warn("Failed to close module '{}'", moduleId, ex);
+			}
 		});
 		systemExtensionsCache.clear();
 		if (sharedAPIRegistry != null) {
