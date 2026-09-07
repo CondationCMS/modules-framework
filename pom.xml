@@ -66,12 +66,12 @@
 			<dependency>
 				<groupId>org.slf4j</groupId>
 				<artifactId>slf4j-api</artifactId>
-				<version>2.0.18</version>
+				<version>2.0.19</version>
 			</dependency>
 			<dependency>
 				<groupId>org.projectlombok</groupId>
 				<artifactId>lombok</artifactId>
-				<version>1.18.46</version>
+				<version>1.18.48</version>
 				<scope>provided</scope>
 			</dependency>
 		</dependencies>
@@ -89,7 +89,7 @@
 							<path>
 								<groupId>org.projectlombok</groupId>
 								<artifactId>lombok</artifactId>
-								<version>1.18.46</version>
+								<version>1.18.48</version>
 							</path>
 							<path>
 								<groupId>com.google.auto.service</groupId>
@@ -220,7 +220,7 @@
 						<path>
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
-							<version>1.18.46</version>
+							<version>1.18.48</version>
 						</path>
 						<path>
 							<groupId>com.condation.modules.framework</groupId>
